@@ -1,0 +1,23 @@
+[package]
+name = "new_type_derive"
+version = "0.1.0"
+authors = ["Marcus Griep <marcus@griep.us>"]
+license = "MIT/Apache-2.0"
+description = "Combat primitive obsession by easily creating strongly-typed wrappers and reference types"
+repository = "https://github.com/neoeinstein/new_type_derive"
+
+[dependencies]
+serde = { version = "1.0", optional = true }
+
+[dev-dependencies]
+arrayvec = { version = "0.4.7", features = [ "serde-1" ] }
+bincode = "1.0.1"
+lazy_static = "1.0.2"
+proptest = "0.8"
+static_assertions = "0.2.5"
+
+[features]
+default = []
+
+[package.metadata.docs.rs]
+features = [ "serde" ]
