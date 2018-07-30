@@ -52,18 +52,18 @@
 /// }
 ///
 /// # pub fn main() {
-/// assert!(MyNewTypeRef::new("").is_err());
-/// assert!(MyNewType::new("Test").is_ok());
+/// assert!(MyNewTypeRef::try_as_ref("").is_err());
+/// assert!(MyNewType::try_into("Test").is_ok());
 /// assert_eq!(
-///     MyNewType::new("X").unwrap(),
-///     MyNewTypeRef::new("X").unwrap(),
+///     MyNewType::try_into("X").unwrap(),
+///     MyNewTypeRef::try_as_ref("X").unwrap(),
 /// );
 /// assert_eq!(
-///     MyNewType::new("X").unwrap(),
-///     MyNewType::from(MyNewTypeRef::new("X").unwrap()),
+///     MyNewType::try_into("X").unwrap(),
+///     MyNewType::from(MyNewTypeRef::try_as_ref("X").unwrap()),
 /// );
-/// assert_eq!("X", MyNewType::new("X").unwrap(),);
-/// assert_eq!(1, MyNewType::new("X").unwrap().as_ref().len(),);
+/// assert_eq!("X", MyNewType::try_into("X").unwrap(),);
+/// assert_eq!(1, MyNewType::try_into("X").unwrap().as_ref().len(),);
 /// # }
 /// ```
 macro_rules! new_type_pair {
@@ -80,17 +80,12 @@ pub struct $otype {
 
 impl $otype {
     /// Creates a new type by consuming and validating `value` and then returning the wrapped value or an error
-    pub fn new(value: impl ::std::convert::Into<$itype>) -> ::std::result::Result<Self, <$rtype as NewTypeRef>::ValidationError> {
-        let inner = ::std::convert::Into::into(value);
-        <$rtype as NewTypeRef>::validate(::std::convert::AsRef::<$stype>::as_ref(&inner))?;
+    pub fn try_into(value: impl Into<$itype>) -> Result<Self, <$rtype as NewTypeRef>::ValidationError> {
+        let inner = value.into();
+        <$rtype as NewTypeRef>::validate(inner.as_ref())?;
         Ok($otype { inner })
     }
 
-    #[inline]
-    /// Consumes the wrapper, returning the unwrapped inner value
-    pub fn into_inner(self) -> $itype {
-        self.inner
-    }
 }
 
 $(#[$rmeta])*
@@ -101,10 +96,10 @@ pub struct $rtype {
 impl $rtype {
     /// Creates a reference by validating `value` and then returning a typed reference to the value or an error
     #[allow(unsafe_code)]
-    pub fn new<S: ::std::convert::AsRef<$stype> + ?Sized>(value: &S) -> ::std::result::Result<&Self, <$rtype as NewTypeRef>::ValidationError> {
-        let inner_ref = ::std::convert::AsRef::as_ref(value);
+    pub fn try_as_ref<S: AsRef<$stype> + ?Sized>(value: &S) -> Result<&Self, <$rtype as NewTypeRef>::ValidationError> {
+        let inner_ref = value.as_ref();
         <Self as NewTypeRef>::validate(inner_ref)?;
-        Ok(unsafe { Self::from_unchecked(inner_ref) })
+        Ok(#[allow(unsafe_code)] unsafe { Self::from_unchecked(inner_ref) })
     }
 
     #[inline]
@@ -119,33 +114,35 @@ impl ::std::ops::Deref for $otype {
 
     #[inline]
     fn deref(&self) -> &$rtype {
-        ::std::convert::AsRef::as_ref(self)
+        self.as_ref()
     }
 }
 
 impl ::std::borrow::Borrow<$rtype> for $otype {
+    #[inline]
     fn borrow(&self) -> &$rtype {
-        ::std::convert::AsRef::as_ref(self)
+        self.as_ref()
     }
 }
 
 impl ::std::borrow::Borrow<$stype> for $otype {
+    #[inline]
     fn borrow(&self) -> &$stype {
-        ::std::convert::AsRef::as_ref(::std::convert::AsRef::as_ref(self))
+        self.as_ref().as_ref()
     }
 }
 
 impl ::std::borrow::Borrow<$stype> for $rtype {
+    #[inline]
     fn borrow(&self) -> &$stype {
-        &self.inner
+        self.as_ref()
     }
 }
 
 impl ::std::convert::AsRef<$rtype> for $otype {
-    #[allow(unsafe_code)]
     #[inline]
     fn as_ref(&self) -> &$rtype {
-        unsafe { $rtype::from_unchecked(::std::convert::AsRef::as_ref(&self.inner)) }
+        #[allow(unsafe_code)] unsafe { $rtype::from_unchecked(self.inner.as_ref()) }
     }
 }
 
@@ -156,87 +153,230 @@ impl ::std::convert::AsRef<$stype> for $rtype {
     }
 }
 
+impl ::std::convert::AsRef<$rtype> for $rtype {
+    #[inline]
+    fn as_ref(&self) -> &$rtype {
+        &self
+    }
+}
+
 impl<'a> ::std::cmp::PartialEq<$otype> for &'a $rtype {
     #[inline]
-    fn eq(&self, other: &$otype) -> bool {
-         ::std::cmp::PartialEq::eq(::std::convert::AsRef::<$stype>::as_ref(&self), ::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&other)))
+    fn eq(&self, rhs: &$otype) -> bool {
+        *self == rhs.as_ref()
+    }
+}
+
+impl ::std::cmp::PartialEq<$otype> for $rtype {
+    #[inline]
+    fn eq(&self, rhs: &$otype) -> bool {
+        self == rhs.as_ref()
     }
 }
 
 impl<'a> ::std::cmp::PartialEq<$otype> for &'a $stype {
     #[inline]
-    fn eq(&self, other: &$otype) -> bool {
-         ::std::cmp::PartialEq::eq(*self, ::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&other)))
+    fn eq(&self, rhs: &$otype) -> bool {
+        self == rhs.as_ref()
+    }
+}
+
+impl ::std::cmp::PartialEq<$otype> for $stype {
+    #[inline]
+    fn eq(&self, rhs: &$otype) -> bool {
+        self == rhs.as_ref()
     }
 }
 
 impl<'a> ::std::cmp::PartialEq<&'a $stype> for $otype {
     #[inline]
-    fn eq(&self, other: &&'a $stype) -> bool {
-         ::std::cmp::PartialEq::eq(::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&self)), *other)
+    fn eq(&self, rhs: &&'a $stype) -> bool {
+        self.as_ref() == *rhs
+    }
+}
+
+impl ::std::cmp::PartialEq<$stype> for $otype {
+    #[inline]
+    fn eq(&self, rhs: &$stype) -> bool {
+        self.as_ref() == *rhs
     }
 }
 
 impl<'a> ::std::cmp::PartialEq<&'a $rtype> for $otype {
     #[inline]
-    fn eq(&self, other: &&'a $rtype) -> bool {
-         ::std::cmp::PartialEq::eq(::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&self)), ::std::convert::AsRef::<$stype>::as_ref(&other))
+    fn eq(&self, rhs: &&'a $rtype) -> bool {
+        self.as_ref() == *rhs
+    }
+}
+
+impl ::std::cmp::PartialEq<$rtype> for $otype {
+    #[inline]
+    fn eq(&self, rhs: &$rtype) -> bool {
+        self.as_ref() == rhs
     }
 }
 
 impl ::std::cmp::PartialEq<$rtype> for $stype {
     #[inline]
-    fn eq(&self, other: &$rtype) -> bool {
-         ::std::cmp::PartialEq::eq(self, &other.inner)
+    fn eq(&self, rhs: &$rtype) -> bool {
+        self == &rhs.inner
+    }
+}
+
+impl<'a> ::std::cmp::PartialEq<&'a $rtype> for $stype {
+    #[inline]
+    fn eq(&self, rhs: &&'a $rtype) -> bool {
+        self == &rhs.inner
+    }
+}
+
+impl<'a> ::std::cmp::PartialEq<$rtype> for &'a $stype {
+    #[inline]
+    fn eq(&self, rhs: &$rtype) -> bool {
+        *self == &rhs.inner
     }
 }
 
 impl ::std::cmp::PartialEq<$stype> for $rtype {
     #[inline]
-    fn eq(&self, other: &$stype) -> bool {
-         ::std::cmp::PartialEq::eq(&self.inner, other)
+    fn eq(&self, rhs: &$stype) -> bool {
+        &self.inner == rhs
+    }
+}
+
+impl<'a> ::std::cmp::PartialEq<&'a $stype> for $rtype {
+    #[inline]
+    fn eq(&self, rhs: &&'a $stype) -> bool {
+        &self.inner == *rhs
+    }
+}
+
+impl<'a> ::std::cmp::PartialEq<$stype> for &'a $rtype {
+    #[inline]
+    fn eq(&self, rhs: &$stype) -> bool {
+        &self.inner == rhs
     }
 }
 
 impl<'a> ::std::cmp::PartialOrd<$otype> for &'a $rtype {
     #[inline]
-    fn partial_cmp(&self, other: &$otype) -> ::std::option::Option<::std::cmp::Ordering> {
-        ::std::cmp::PartialOrd::partial_cmp(::std::convert::AsRef::<$stype>::as_ref(&self), ::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&other)))
+    fn partial_cmp(&self, rhs: &$otype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            self,
+            &rhs.as_ref(),
+        )
+    }
+}
+
+impl ::std::cmp::PartialOrd<$otype> for $rtype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &$otype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            &self,
+            &rhs.as_ref(),
+        )
     }
 }
 
 impl<'a> ::std::cmp::PartialOrd<$otype> for &'a $stype {
     #[inline]
-    fn partial_cmp(&self, other: &$otype) -> ::std::option::Option<::std::cmp::Ordering> {
-        ::std::cmp::PartialOrd::partial_cmp(*self, ::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&other)))
+    fn partial_cmp(&self, rhs: &$otype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            self,
+            &rhs.as_ref(),
+        )
     }
 }
 
-impl<'a> ::std::cmp::PartialOrd<&'a $stype> for $otype {
+impl ::std::cmp::PartialOrd<$otype> for $stype {
     #[inline]
-    fn partial_cmp(&self, other: &&'a $stype) -> ::std::option::Option<::std::cmp::Ordering> {
-        ::std::cmp::PartialOrd::partial_cmp(::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&self)), *other)
+    fn partial_cmp(&self, rhs: &$otype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            &self,
+            &rhs.as_ref(),
+        )
     }
 }
 
 impl<'a> ::std::cmp::PartialOrd<&'a $rtype> for $otype {
     #[inline]
-    fn partial_cmp(&self, other: &&'a $rtype) -> ::std::option::Option<::std::cmp::Ordering> {
-        ::std::cmp::PartialOrd::partial_cmp(::std::convert::AsRef::<$stype>::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&self)), ::std::convert::AsRef::<$stype>::as_ref(other))
+    fn partial_cmp(&self, rhs: &&'a $rtype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            &self.as_ref(),
+            rhs,
+        )
+    }
+}
+
+impl ::std::cmp::PartialOrd<$rtype> for $otype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &$rtype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            &self.as_ref(),
+            &rhs,
+        )
+    }
+}
+
+impl<'a> ::std::cmp::PartialOrd<&'a $stype> for $otype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &&'a $stype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            &self.as_ref(),
+            rhs,
+        )
+    }
+}
+
+impl ::std::cmp::PartialOrd<$stype> for $otype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &$stype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(
+            &self.as_ref(),
+            &rhs,
+        )
     }
 }
 
 impl ::std::cmp::PartialOrd<$rtype> for $stype {
     #[inline]
-    fn partial_cmp(&self, other: &$rtype) -> ::std::option::Option<::std::cmp::Ordering> {
-        ::std::cmp::PartialOrd::partial_cmp(self, &other.inner)
+    fn partial_cmp(&self, rhs: &$rtype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(self, &rhs.inner)
+    }
+}
+
+impl<'a> ::std::cmp::PartialOrd<&'a $rtype> for $stype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &&'a $rtype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(self, &rhs.inner)
+    }
+}
+
+impl<'a> ::std::cmp::PartialOrd<$rtype> for &'a $stype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &$rtype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(*self, &rhs.inner)
     }
 }
 
 impl ::std::cmp::PartialOrd<$stype> for $rtype {
     #[inline]
-    fn partial_cmp(&self, other: &$stype) -> ::std::option::Option<::std::cmp::Ordering> {
-        ::std::cmp::PartialOrd::partial_cmp(&self.inner, other)
+    fn partial_cmp(&self, rhs: &$stype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(&self.inner, rhs)
+    }
+}
+
+impl<'a> ::std::cmp::PartialOrd<&'a $stype> for $rtype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &&'a $stype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(&self.inner, *rhs)
+    }
+}
+
+impl<'a> ::std::cmp::PartialOrd<$stype> for &'a $rtype {
+    #[inline]
+    fn partial_cmp(&self, rhs: &$stype) -> Option<::std::cmp::Ordering> {
+        ::std::cmp::PartialOrd::partial_cmp(&self.inner, rhs)
     }
 }
 
@@ -247,21 +387,27 @@ impl<'a> From<&'a $rtype> for $otype {
     }
 }
 
-#[cfg(feature = "serde")]
-impl ::serde::Serialize for $otype {
-    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
-    where S: ::serde::Serializer {
-        ::serde::Serializer::serialize_str(serializer, ::std::convert::AsRef::as_ref(::std::convert::AsRef::<$rtype>::as_ref(&self)))
+impl From<$otype> for $itype {
+    #[inline]
+    fn from(o: $otype) -> Self {
+        o.inner
     }
 }
 
 #[cfg(feature = "serde")]
-#[cfg_attr(all(test, feature = "mutate"), mutate)]
+impl ::serde::Serialize for $otype {
+    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
+    where S: ::serde::Serializer {
+        ::serde::Serializer::serialize_str(serializer, AsRef::<$stype>::as_ref(AsRef::<$rtype>::as_ref(&self)))
+    }
+}
+
+#[cfg(feature = "serde")]
 impl<'de> ::serde::Deserialize<'de> for $otype {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error> where
         D: ::serde::Deserializer<'de> {
         let inner: $itype = ::serde::Deserialize::deserialize(deserializer)?;
-        Ok($otype::new(inner).map_err(|e| ::serde::de::Error::custom(e.to_string()))?)
+        Ok($otype::try_into(inner).map_err(|e| ::serde::de::Error::custom(e.to_string()))?)
     }
 }
 
@@ -269,7 +415,7 @@ impl<'de> ::serde::Deserialize<'de> for $otype {
 impl ::serde::Serialize for $rtype {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: ::serde::Serializer {
-        ::serde::Serializer::serialize_str(serializer, ::std::convert::AsRef::as_ref(&self))
+        ::serde::Serializer::serialize_str(serializer, AsRef::<$stype>::as_ref(&self))
     }
 }
 
@@ -277,22 +423,8 @@ impl ::serde::Serialize for $rtype {
 impl<'de> ::serde::Deserialize<'de> for &'de $rtype {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error> where
         D: ::serde::Deserializer<'de> {
-        struct InnerVisitor;
-
-        impl<'de> ::serde::de::Visitor<'de> for InnerVisitor {
-            type Value = &'de $rtype;
-
-            fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
-                formatter.write_str("a valid, borrowable MCP SKU")
-            }
-
-            fn visit_borrowed_str<E>(self, v: &'de str) -> ::std::result::Result<Self::Value, E> where
-                E: ::serde::de::Error, {
-                Ok($rtype::new(v).map_err(|e| ::serde::de::Error::custom(::std::string::ToString::to_string(&e)))?)
-            }
-        }
-
-        ::serde::Deserializer::deserialize_str(deserializer, InnerVisitor)
+        let inner: &$stype = ::serde::Deserialize::deserialize(deserializer)?;
+        Ok($rtype::try_as_ref(inner).map_err(|e| ::serde::de::Error::custom(e.to_string()))?)
     }
 }
     };
@@ -306,7 +438,7 @@ mod test {
     use NewTypeRef;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub struct EmptyStringError;
+    struct EmptyStringError;
 
     impl fmt::Display for EmptyStringError {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -374,8 +506,8 @@ mod test {
 
     #[test]
     fn minimal() {
-        assert!(StrWrap::new("x").is_ok());
-        assert!(StrWrapRef::new("").is_err());
+        assert!(StrWrap::try_into("x").is_ok());
+        assert!(StrWrapRef::try_as_ref("").is_err());
     }
 
     const TEST_STRING: &str = "TESTING";
@@ -384,8 +516,84 @@ mod test {
     }
 
     #[test]
+    fn equality() {
+        assert_eq!(TEST_STRING, StrWrap::try_into(TEST_STRING).unwrap());
+        assert_eq!(*TEST_STRING, StrWrap::try_into(TEST_STRING).unwrap());
+        assert_eq!(TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(*TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(TEST_STRING, *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(*TEST_STRING, *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), StrWrap::try_into(TEST_STRING).unwrap());
+        assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), StrWrap::try_into(TEST_STRING).unwrap());
+        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), TEST_STRING);
+        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), *TEST_STRING);
+        assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING);
+        assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), *TEST_STRING);
+        assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING);
+        assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), *TEST_STRING);
+        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+    }
+
+    #[test]
+    fn cmp() {
+        use std::cmp::{Ordering, PartialOrd};
+        const EQUAL: Option<Ordering> = Some(Ordering::Equal);
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, &StrWrap::try_into(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, &StrWrap::try_into(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &StrWrap::try_into(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &StrWrap::try_into(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), &TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+    }
+
+    #[test]
+    fn into_as_ref_roundtrip() {
+        let start: String = String::from(TEST_STRING);
+        let f1 = StrWrap::try_into(start.clone()).unwrap();
+        assert_eq!(TEST_STRING, f1);
+        let f2: &StrWrapRef = f1.as_ref();
+        assert_eq!(TEST_STRING, f2);
+        let f3: &str = f2.as_ref();
+        assert_eq!(TEST_STRING, f3);
+        let f4: &StrWrapRef = StrWrapRef::try_as_ref(f3).unwrap();
+        assert_eq!(TEST_STRING, f4);
+        let f5: StrWrap = f4.into();
+        assert_eq!(TEST_STRING, f5);
+        let end: String = f5.into();
+        assert_eq!(start, end);
+    }
+
+    #[test]
+    fn as_ref_into_roundtrip() {
+        let start: &str = TEST_STRING;
+        let f1: &StrWrapRef = StrWrapRef::try_as_ref(start).unwrap();
+        assert_eq!(TEST_STRING, f1);
+        let f2: StrWrap = f1.into();
+        assert_eq!(TEST_STRING, f2);
+        let f3: String = f2.into();
+        assert_eq!(TEST_STRING, f3);
+        let f4 = StrWrap::try_into(f3).unwrap();
+        assert_eq!(TEST_STRING, f4);
+        let f5: &StrWrapRef = f4.as_ref();
+        assert_eq!(TEST_STRING, f5);
+        let end: &str = f5.as_ref();
+        assert_eq!(start, end);
+    }
+
+    #[test]
     fn str_wrap_is_serializable() {
-        let value = bincode::serialize(&StrWrap::new(TEST_STRING).unwrap())
+        let value = bincode::serialize(&StrWrap::try_into(TEST_STRING).unwrap())
             .expect("serialization should succeed");
         assert_eq!(*SERIALIZED_TEST_STRING, value);
     }
@@ -393,14 +601,14 @@ mod test {
     #[test]
     fn arr_str_wrap_is_serializable() {
         let value = bincode::serialize(
-            &ArrStrWrap::new(ArrayString::from(TEST_STRING).unwrap()).unwrap(),
+            &ArrStrWrap::try_into(ArrayString::from(TEST_STRING).unwrap()).unwrap(),
         ).expect("serialization should succeed");
         assert_eq!(*SERIALIZED_TEST_STRING, value);
     }
 
     #[test]
     fn str_wrap_ref_is_serializable() {
-        let value = bincode::serialize(StrWrapRef::new(TEST_STRING).unwrap())
+        let value = bincode::serialize(StrWrapRef::try_as_ref(TEST_STRING).unwrap())
             .expect("serialization should succeed");
         assert_eq!(*SERIALIZED_TEST_STRING, value);
     }
@@ -408,7 +616,7 @@ mod test {
     #[test]
     fn arr_str_wrap_ref_is_serializable() {
         let value = bincode::serialize(
-            ArrStrWrapRef::new(&ArrayString::<[u8; 16]>::from(TEST_STRING).unwrap()).unwrap(),
+            ArrStrWrapRef::try_as_ref(&ArrayString::<[u8; 16]>::from(TEST_STRING).unwrap()).unwrap(),
         ).expect("serialization should succeed");
         assert_eq!(*SERIALIZED_TEST_STRING, value);
     }
@@ -451,49 +659,49 @@ mod test {
         println!("String: {}", size_of_val(&String::from(TEST_STR)));
         println!(
             "StrWrapRef: {}",
-            size_of_val(StrWrapRef::new(TEST_STR).unwrap())
+            size_of_val(StrWrapRef::try_as_ref(TEST_STR).unwrap())
         );
         println!(
             "&StrWrapRef: {}",
-            size_of_val(&StrWrapRef::new(TEST_STR).unwrap())
+            size_of_val(&StrWrapRef::try_as_ref(TEST_STR).unwrap())
         );
-        println!("StrWrap: {}", size_of_val(&StrWrap::new(TEST_STR).unwrap()));
+        println!("StrWrap: {}", size_of_val(&StrWrap::try_into(TEST_STR).unwrap()));
         println!(
             "ArrStrWrapRef: {}",
-            size_of_val(ArrStrWrapRef::new(TEST_STR).unwrap())
+            size_of_val(ArrStrWrapRef::try_as_ref(TEST_STR).unwrap())
         );
         println!(
             "&ArrStrWrapRef: {}",
-            size_of_val(&ArrStrWrapRef::new(TEST_STR).unwrap())
+            size_of_val(&ArrStrWrapRef::try_as_ref(TEST_STR).unwrap())
         );
         println!(
             "ArrStrWrap: {}",
-            size_of_val(&ArrStrWrap::new(ArrayString::from(TEST_STR).unwrap()).unwrap())
+            size_of_val(&ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap())
         );
         println!(
             "[ArrStrWrap;2]: {}",
             size_of_val(&[
-                ArrStrWrap::new(ArrayString::from(TEST_STR).unwrap()).unwrap(),
-                ArrStrWrap::new(ArrayString::from(TEST_STR).unwrap()).unwrap()
+                ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap(),
+                ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap()
             ])
         );
-        assert_eq_size_ptr!(&TEST_STR, &StrWrapRef::new(TEST_STR).unwrap());
-        assert_eq_size_ptr!(&TEST_STR, &ArrStrWrapRef::new(TEST_STR).unwrap());
+        assert_eq_size_ptr!(&TEST_STR, &StrWrapRef::try_as_ref(TEST_STR).unwrap());
+        assert_eq_size_ptr!(&TEST_STR, &ArrStrWrapRef::try_as_ref(TEST_STR).unwrap());
         assert_eq_size_val!(
             String::from(TEST_STR),
-            StrWrap::new(String::from(TEST_STR)).unwrap()
+            StrWrap::try_into(String::from(TEST_STR)).unwrap()
         );
         assert_eq_size_val!(
             ArrayString::<[u8; 16]>::from(TEST_STR).unwrap(),
-            ArrStrWrap::new(ArrayString::from(TEST_STR).unwrap()).unwrap()
+            ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap()
         );
     }
 
     proptest! {
         #[test]
         fn wrapped_equal_or_error_same(ref s in ".*") {
-            let or = StrWrap::new(s.to_owned());
-            let rr = StrWrapRef::new(s);
+            let or = StrWrap::try_into(s.to_owned());
+            let rr = StrWrapRef::try_as_ref(s);
 
             match (or, rr) {
                 (Ok(o), Ok(r)) => assert_eq!(o, r),
@@ -507,8 +715,8 @@ mod test {
     proptest! {
         #[test]
         fn arr_wrapped_equal_or_error_same(ref s in ".*") {
-            let or = ArrayString::from(s).map_err(|e| format!("{:?}", e)).and_then(|s| ArrStrWrap::new(s).map_err(|e| format!("{:?}", e)));
-            let rr = ArrStrWrapRef::new(s).map_err(|e| format!("{:?}", e));
+            let or = ArrayString::from(s).map_err(|e| format!("{:?}", e)).and_then(|s| ArrStrWrap::try_into(s).map_err(|e| format!("{:?}", e)));
+            let rr = ArrStrWrapRef::try_as_ref(s).map_err(|e| format!("{:?}", e));
 
             match (or, rr) {
                 (Ok(o), Ok(r)) => assert_eq!(o, r),
