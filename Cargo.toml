@@ -1,6 +1,6 @@
 [package]
 name = "new_type_derive"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Marcus Griep <marcus@griep.us>"]
 license = "MIT/Apache-2.0"
 description = "Combat primitive obsession by easily creating strongly-typed wrappers and reference types"
