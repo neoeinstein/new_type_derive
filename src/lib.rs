@@ -25,6 +25,9 @@ extern crate lazy_static;
 extern crate proptest;
 #[cfg(all(feature = "serde", test))]
 extern crate serde;
+#[cfg(all(feature = "serde", test))]
+#[macro_use]
+extern crate serde_derive;
 #[cfg(test)]
 #[macro_use]
 extern crate static_assertions;

@@ -420,7 +420,7 @@ impl ::serde::Serialize for $rtype {
 }
 
 #[cfg(feature = "serde")]
-impl<'de> ::serde::Deserialize<'de> for &'de $rtype {
+impl<'de: 'a, 'a> ::serde::Deserialize<'de> for &'a $rtype {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error> where
         D: ::serde::Deserializer<'de> {
         let inner: &$stype = ::serde::Deserialize::deserialize(deserializer)?;
@@ -511,6 +511,7 @@ mod test {
     }
 
     const TEST_STRING: &str = "TESTING";
+    const ALT_STRING: &str = "Ĉu ĝustas?";
     lazy_static! {
         static ref SERIALIZED_TEST_STRING: Vec<u8> = bincode::serialize(TEST_STRING).unwrap();
     }
@@ -647,6 +648,28 @@ mod test {
         let value: &ArrStrWrapRef =
             bincode::deserialize(&SERIALIZED_TEST_STRING).expect("deserialization to succeed");
         assert_eq!(value, TEST_STRING);
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct RefHolder<'a, 'b> {
+        #[serde(borrow)]
+        str_wrap: &'a StrWrapRef,
+        #[serde(borrow)]
+        arr_wrap: &'b ArrStrWrapRef,
+    }
+
+    #[test]
+    fn refs_in_structure_can_roundtrip() {
+        let source: RefHolder = RefHolder {
+            str_wrap: StrWrapRef::try_as_ref(&TEST_STRING).unwrap(),
+            arr_wrap: ArrStrWrapRef::try_as_ref(&ALT_STRING).unwrap(),
+        };
+
+        let intermediate = bincode::serialize(&source).expect("serialization to succeed");
+
+        let actual: RefHolder = bincode::deserialize(&intermediate).expect("deserialization to succeed");
+
+        assert_eq!(source, actual);
     }
 
     #[test]
