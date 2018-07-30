@@ -17,7 +17,7 @@
 extern crate arrayvec;
 #[cfg(all(feature = "serde", test))]
 extern crate bincode;
-#[cfg(test)]
+#[cfg(all(feature = "serde", test))]
 #[macro_use]
 extern crate lazy_static;
 #[cfg(test)]

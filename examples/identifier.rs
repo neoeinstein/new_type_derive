@@ -1,9 +1,10 @@
-#![cfg(feature = "serde")]
-
 extern crate arrayvec;
 #[macro_use] extern crate new_type_derive;
+#[cfg(feature = "serde")]
 extern crate serde;
+#[cfg(feature = "serde")]
 #[macro_use] extern crate serde_derive;
+#[cfg(feature = "serde")]
 extern crate bincode;
 
 use arrayvec::ArrayString;
@@ -48,15 +49,15 @@ impl ShortIdRef {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 struct RefContainer<'a> {
-    #[serde(borrow)]
+    #[cfg_attr(feature = "serde", serde(borrow))]
     ident: &'a ShortIdRef,
     hash: u64,
 }
 
-fn main() {
-    use bincode;
+pub fn main() {
     use std::env;
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -81,14 +82,19 @@ fn main() {
     };
     println!("In container: {:?}", in_container);
 
-    println!("Serializing to bincode…");
-    let serialized = bincode::serialize(&in_container).expect("serialization to succeed");
-    println!("Serialized as: {:02x?}", serialized);
+    #[cfg(feature = "serde")]
+    {
+        use bincode;
 
-    println!("Deserializing from bincode…");
-    let deserialized: RefContainer =
-        bincode::deserialize(&serialized).expect("deserialization to succeed");
-    println!("Deserialized as: {:?}", deserialized);
+        println!("Serializing to bincode…");
+        let serialized = bincode::serialize(&in_container).expect("serialization to succeed");
+        println!("Serialized as: {:02x?}", serialized);
 
-    assert_eq!(in_container, deserialized);
+        println!("Deserializing from bincode…");
+        let deserialized: RefContainer =
+            bincode::deserialize(&serialized).expect("deserialization to succeed");
+        println!("Deserialized as: {:?}", deserialized);
+
+        assert_eq!(in_container, deserialized);
+    }
 }
