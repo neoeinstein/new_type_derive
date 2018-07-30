@@ -53,17 +53,17 @@
 ///
 /// # pub fn main() {
 /// assert!(MyNewTypeRef::try_as_ref("").is_err());
-/// assert!(MyNewType::try_into("Test").is_ok());
+/// assert!(MyNewType::try_from("Test").is_ok());
 /// assert_eq!(
-///     MyNewType::try_into("X").unwrap(),
+///     MyNewType::try_from("X").unwrap(),
 ///     MyNewTypeRef::try_as_ref("X").unwrap(),
 /// );
 /// assert_eq!(
-///     MyNewType::try_into("X").unwrap(),
+///     MyNewType::try_from("X").unwrap(),
 ///     MyNewType::from(MyNewTypeRef::try_as_ref("X").unwrap()),
 /// );
-/// assert_eq!("X", MyNewType::try_into("X").unwrap(),);
-/// assert_eq!(1, MyNewType::try_into("X").unwrap().as_ref().len(),);
+/// assert_eq!("X", MyNewType::try_from("X").unwrap(),);
+/// assert_eq!(1, MyNewType::try_from("X").unwrap().as_ref().len(),);
 /// # }
 /// ```
 macro_rules! new_type_pair {
@@ -80,7 +80,7 @@ pub struct $otype {
 
 impl $otype {
     /// Creates a new type by consuming and validating `value` and then returning the wrapped value or an error
-    pub fn try_into(value: impl Into<$itype>) -> Result<Self, <$rtype as NewTypeRef>::ValidationError> {
+    pub fn try_from(value: impl Into<$itype>) -> Result<Self, <$rtype as NewTypeRef>::ValidationError> {
         let inner = value.into();
         <$rtype as NewTypeRef>::validate(inner.as_ref())?;
         Ok($otype { inner })
@@ -407,7 +407,7 @@ impl<'de> ::serde::Deserialize<'de> for $otype {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error> where
         D: ::serde::Deserializer<'de> {
         let inner: $itype = ::serde::Deserialize::deserialize(deserializer)?;
-        Ok($otype::try_into(inner).map_err(|e| ::serde::de::Error::custom(e.to_string()))?)
+        Ok($otype::try_from(inner).map_err(|e| ::serde::de::Error::custom(e.to_string()))?)
     }
 }
 
@@ -438,7 +438,7 @@ mod test {
     use NewTypeRef;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    struct EmptyStringError;
+    pub struct EmptyStringError;
 
     impl fmt::Display for EmptyStringError {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -506,7 +506,7 @@ mod test {
 
     #[test]
     fn minimal() {
-        assert!(StrWrap::try_into("x").is_ok());
+        assert!(StrWrap::try_from("x").is_ok());
         assert!(StrWrapRef::try_as_ref("").is_err());
     }
 
@@ -517,50 +517,50 @@ mod test {
 
     #[test]
     fn equality() {
-        assert_eq!(TEST_STRING, StrWrap::try_into(TEST_STRING).unwrap());
-        assert_eq!(*TEST_STRING, StrWrap::try_into(TEST_STRING).unwrap());
+        assert_eq!(TEST_STRING, StrWrap::try_from(TEST_STRING).unwrap());
+        assert_eq!(*TEST_STRING, StrWrap::try_from(TEST_STRING).unwrap());
         assert_eq!(TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap());
         assert_eq!(*TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap());
         assert_eq!(TEST_STRING, *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
         assert_eq!(*TEST_STRING, *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
-        assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), StrWrap::try_into(TEST_STRING).unwrap());
-        assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), StrWrap::try_into(TEST_STRING).unwrap());
-        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), TEST_STRING);
-        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), *TEST_STRING);
+        assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), StrWrap::try_from(TEST_STRING).unwrap());
+        assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), StrWrap::try_from(TEST_STRING).unwrap());
+        assert_eq!(StrWrap::try_from(TEST_STRING).unwrap(), TEST_STRING);
+        assert_eq!(StrWrap::try_from(TEST_STRING).unwrap(), *TEST_STRING);
         assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING);
         assert_eq!(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), *TEST_STRING);
         assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING);
         assert_eq!(*StrWrapRef::try_as_ref(TEST_STRING).unwrap(), *TEST_STRING);
-        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), StrWrapRef::try_as_ref(TEST_STRING).unwrap());
-        assert_eq!(StrWrap::try_into(TEST_STRING).unwrap(), *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(StrWrap::try_from(TEST_STRING).unwrap(), StrWrapRef::try_as_ref(TEST_STRING).unwrap());
+        assert_eq!(StrWrap::try_from(TEST_STRING).unwrap(), *StrWrapRef::try_as_ref(TEST_STRING).unwrap());
     }
 
     #[test]
     fn cmp() {
         use std::cmp::{Ordering, PartialOrd};
         const EQUAL: Option<Ordering> = Some(Ordering::Equal);
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, &StrWrap::try_into(TEST_STRING).unwrap()));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, &StrWrap::try_into(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, &StrWrap::try_from(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, &StrWrap::try_from(TEST_STRING).unwrap()));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(&TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(TEST_STRING, StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &StrWrap::try_into(TEST_STRING).unwrap()));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &StrWrap::try_into(TEST_STRING).unwrap()));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), &TEST_STRING));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &StrWrap::try_from(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &StrWrap::try_from(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_from(TEST_STRING).unwrap(), &TEST_STRING));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_from(TEST_STRING).unwrap(), TEST_STRING));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &TEST_STRING));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), &TEST_STRING));
         assert_eq!(EQUAL, PartialOrd::partial_cmp(StrWrapRef::try_as_ref(TEST_STRING).unwrap(), TEST_STRING));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
-        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_into(TEST_STRING).unwrap(), StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_from(TEST_STRING).unwrap(), &StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
+        assert_eq!(EQUAL, PartialOrd::partial_cmp(&StrWrap::try_from(TEST_STRING).unwrap(), StrWrapRef::try_as_ref(TEST_STRING).unwrap()));
     }
 
     #[test]
     fn into_as_ref_roundtrip() {
         let start: String = String::from(TEST_STRING);
-        let f1 = StrWrap::try_into(start.clone()).unwrap();
+        let f1 = StrWrap::try_from(start.clone()).unwrap();
         assert_eq!(TEST_STRING, f1);
         let f2: &StrWrapRef = f1.as_ref();
         assert_eq!(TEST_STRING, f2);
@@ -583,7 +583,7 @@ mod test {
         assert_eq!(TEST_STRING, f2);
         let f3: String = f2.into();
         assert_eq!(TEST_STRING, f3);
-        let f4 = StrWrap::try_into(f3).unwrap();
+        let f4 = StrWrap::try_from(f3).unwrap();
         assert_eq!(TEST_STRING, f4);
         let f5: &StrWrapRef = f4.as_ref();
         assert_eq!(TEST_STRING, f5);
@@ -593,7 +593,7 @@ mod test {
 
     #[test]
     fn str_wrap_is_serializable() {
-        let value = bincode::serialize(&StrWrap::try_into(TEST_STRING).unwrap())
+        let value = bincode::serialize(&StrWrap::try_from(TEST_STRING).unwrap())
             .expect("serialization should succeed");
         assert_eq!(*SERIALIZED_TEST_STRING, value);
     }
@@ -601,7 +601,7 @@ mod test {
     #[test]
     fn arr_str_wrap_is_serializable() {
         let value = bincode::serialize(
-            &ArrStrWrap::try_into(ArrayString::from(TEST_STRING).unwrap()).unwrap(),
+            &ArrStrWrap::try_from(ArrayString::from(TEST_STRING).unwrap()).unwrap(),
         ).expect("serialization should succeed");
         assert_eq!(*SERIALIZED_TEST_STRING, value);
     }
@@ -665,7 +665,7 @@ mod test {
             "&StrWrapRef: {}",
             size_of_val(&StrWrapRef::try_as_ref(TEST_STR).unwrap())
         );
-        println!("StrWrap: {}", size_of_val(&StrWrap::try_into(TEST_STR).unwrap()));
+        println!("StrWrap: {}", size_of_val(&StrWrap::try_from(TEST_STR).unwrap()));
         println!(
             "ArrStrWrapRef: {}",
             size_of_val(ArrStrWrapRef::try_as_ref(TEST_STR).unwrap())
@@ -676,31 +676,31 @@ mod test {
         );
         println!(
             "ArrStrWrap: {}",
-            size_of_val(&ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap())
+            size_of_val(&ArrStrWrap::try_from(ArrayString::from(TEST_STR).unwrap()).unwrap())
         );
         println!(
             "[ArrStrWrap;2]: {}",
             size_of_val(&[
-                ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap(),
-                ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap()
+                ArrStrWrap::try_from(ArrayString::from(TEST_STR).unwrap()).unwrap(),
+                ArrStrWrap::try_from(ArrayString::from(TEST_STR).unwrap()).unwrap()
             ])
         );
         assert_eq_size_ptr!(&TEST_STR, &StrWrapRef::try_as_ref(TEST_STR).unwrap());
         assert_eq_size_ptr!(&TEST_STR, &ArrStrWrapRef::try_as_ref(TEST_STR).unwrap());
         assert_eq_size_val!(
             String::from(TEST_STR),
-            StrWrap::try_into(String::from(TEST_STR)).unwrap()
+            StrWrap::try_from(String::from(TEST_STR)).unwrap()
         );
         assert_eq_size_val!(
             ArrayString::<[u8; 16]>::from(TEST_STR).unwrap(),
-            ArrStrWrap::try_into(ArrayString::from(TEST_STR).unwrap()).unwrap()
+            ArrStrWrap::try_from(ArrayString::from(TEST_STR).unwrap()).unwrap()
         );
     }
 
     proptest! {
         #[test]
         fn wrapped_equal_or_error_same(ref s in ".*") {
-            let or = StrWrap::try_into(s.to_owned());
+            let or = StrWrap::try_from(s.to_owned());
             let rr = StrWrapRef::try_as_ref(s);
 
             match (or, rr) {
@@ -715,7 +715,7 @@ mod test {
     proptest! {
         #[test]
         fn arr_wrapped_equal_or_error_same(ref s in ".*") {
-            let or = ArrayString::from(s).map_err(|e| format!("{:?}", e)).and_then(|s| ArrStrWrap::try_into(s).map_err(|e| format!("{:?}", e)));
+            let or = ArrayString::from(s).map_err(|e| format!("{:?}", e)).and_then(|s| ArrStrWrap::try_from(s).map_err(|e| format!("{:?}", e)));
             let rr = ArrStrWrapRef::try_as_ref(s).map_err(|e| format!("{:?}", e));
 
             match (or, rr) {
